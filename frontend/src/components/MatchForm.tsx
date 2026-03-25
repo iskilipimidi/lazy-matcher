@@ -50,13 +50,47 @@ export function MatchForm({ onSubmit, isSubmitting, error }: Props) {
     setText("");
   };
 
-  const loadDemo = () => {
-    setText([
-      "Senior Python Engineer — FastAPI, PostgreSQL, Docker, Kubernetes. 5+ years. Remote or Singapore.",
-      "Frontend Developer — React, TypeScript, design systems, Next.js. 3+ years. Hybrid.",
-      "Staff Backend Engineer — distributed systems, microservices, AWS, observability. 8+ years.",
-      "Full-Stack Engineer — Python, React, PostgreSQL, CI/CD. 4+ years. Remote.",
-    ].join("\n"));
+  const pickRandom = <T,>(arr: T[], count: number): T[] => {
+    const shuffled = [...arr].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.max(1, count));
+  };
+
+  const generateRandom = () => {
+    const titles = [
+      "Senior Python Engineer", "Full-Stack Developer", "Staff Backend Engineer",
+      "Frontend Developer", "DevOps Engineer", "Data Engineer", "ML Engineer",
+      "iOS Developer", "Android Developer", "Platform Engineer", "SRE",
+      "Tech Lead", "Engineering Manager", "QA Engineer", "Security Engineer",
+      "Cloud Architect", "Database Administrator", "Mobile Developer",
+      "React Native Developer", "Go Developer", "Rust Developer",
+      "Java Engineer", "C++ Engineer", "Embedded Systems Engineer",
+      "Blockchain Developer", "Game Developer", "BI Analyst",
+      "Solutions Architect", "API Developer", "Infrastructure Engineer",
+    ];
+    const skills = [
+      "Python", "FastAPI", "Django", "Flask", "JavaScript", "TypeScript",
+      "React", "Next.js", "Vue", "Angular", "Node.js", "PostgreSQL", "MySQL",
+      "MongoDB", "Redis", "Docker", "Kubernetes", "AWS", "GCP", "Azure",
+      "Terraform", "CI/CD", "GraphQL", "REST APIs", "gRPC", "Kafka",
+      "RabbitMQ", "Elasticsearch", "Linux", "Go", "Rust", "Java", "Kotlin",
+      "Swift", "React Native", "TensorFlow", "PyTorch", "Spark", "Airflow",
+    ];
+    const seniorities = ["Junior", "Mid-level", "Senior", "Staff", "Lead", "Principal"];
+    const locations = [
+      "Remote", "Hybrid", "On-site Singapore", "Remote (APAC)", "San Francisco",
+      "New York", "London", "Berlin", "Tokyo", "Sydney", "Toronto", "Remote (EU only)",
+    ];
+
+    const count = Math.floor(Math.random() * 4) + 3; // 3-6 jobs
+    const jobs = Array.from({ length: count }, () => {
+      const title = titles[Math.floor(Math.random() * titles.length)];
+      const pickedSkills = pickRandom(skills, Math.floor(Math.random() * 5) + 3);
+      const seniority = seniorities[Math.floor(Math.random() * seniorities.length)];
+      const years = Math.floor(Math.random() * 10) + 1;
+      const location = locations[Math.floor(Math.random() * locations.length)];
+      return `${seniority} ${title} — ${pickedSkills.join(", ")}. ${years}+ years. ${location}.`;
+    });
+    setText(jobs.join("\n"));
   };
 
   return (
@@ -108,8 +142,8 @@ export function MatchForm({ onSubmit, isSubmitting, error }: Props) {
         <button type="button" className={styles.btnGhost} onClick={() => setText("")}>
           Clear
         </button>
-        <button type="button" className={styles.btnGhost} onClick={loadDemo}>
-          Load demo
+        <button type="button" className={styles.btnGhost} onClick={generateRandom}>
+          Randomize
         </button>
       </div>
     </form>
