@@ -7,12 +7,8 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """App settings. All values can be overridden via environment variables."""
 
-    DATABASE_URL: str = (
-        "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/lazy_matcher"
-    )
-    DATABASE_URL_SYNC: str = (
-        "postgresql://postgres:postgres@127.0.0.1:54322/lazy_matcher"
-    )
+    DATABASE_URL: str = "postgresql://neondb_owner:npg_UZ8qwH3tdmNo@ep-purple-silence-a1qdlxvr-pooler.ap-southeast-1.aws.neon.tech/neondb?ssl=require"
+    DATABASE_URL_SYNC: str = ""
 
     # Upstash Redis
     UPSTASH_REDIS_URL: str = ""
@@ -45,6 +41,25 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    def model_post_init(self, __context):
+        """Ensure DATABASE_URL has asyncpg driver and derive DATABASE_URL_SYNC."""
+        # Add asyncpg driver if plain postgresql://
+        if (
+            self.DATABASE_URL
+            and self.DATABASE_URL.startswith("postgresql://")
+            and "+asyncpg://" not in self.DATABASE_URL
+        ):
+            self.DATABASE_URL = self.DATABASE_URL.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
+        if not self.DATABASE_URL_SYNC:
+            if self.DATABASE_URL:
+                self.DATABASE_URL_SYNC = self.DATABASE_URL.replace(
+                    "postgresql+asyncpg://", "postgresql://"
+                )
+            else:
+                self.DATABASE_URL_SYNC = "postgresql://neondb_owner:npg_UZ8qwH3tdmNo@ep-purple-silence-a1qdlxvr-pooler.ap-southeast-1.aws.neon.tech/neondb?ssl=require"
 
 
 @lru_cache

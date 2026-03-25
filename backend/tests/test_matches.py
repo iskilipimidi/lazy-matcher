@@ -3,14 +3,8 @@
 Tests: POST batch -> observe pending -> worker claims -> worker completes -> GET results.
 """
 
-import os
 import uuid
 import pytest
-
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/lazy_matcher",
-)
 
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
