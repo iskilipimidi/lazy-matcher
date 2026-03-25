@@ -7,23 +7,30 @@ Async job matching pipeline. Submits 1–10 job descriptions, scores them agains
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
 │  Next.js UI  │────▶│  FastAPI API  │────▶│  PostgreSQL  │
-│  (port 3456) │     │  (port 8000) │     │  (port 5432) │
+│  (Vercel)    │     │  (Render)    │     │  (Supabase)  │
 └─────────────┘     └──────┬───────┘     └──────────────┘
                            │
-                    ┌──────▼───────┐
-                    │  Worker(s)   │
-                    │ FOR UPDATE   │
-                    │ SKIP LOCKED  │
-                    └──────────────┘
+                     ┌──────▼───────┐
+                     │  Worker(s)   │
+                     │ FOR UPDATE   │
+                     │ SKIP LOCKED  │
+                     └──────┬───────┘
+                            │
+                     ┌──────▼───────┐
+                     │  LLM Scoring │
+                     │  Gemini API  │
+                     │  (OpenRouter │
+                     │   fallback)  │
+                     └──────────────┘
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11+ (3.14 requires `PYTHON_GIL=0`)
 - Node.js 18+
-- PostgreSQL
+- Supabase CLI (for local PostgreSQL)
 
 ### Backend
 
@@ -36,23 +43,24 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pip install psycopg2-binary
 
-# Set database URL (adjust for your Postgres)
-export DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/lazy_matcher"
+# Start Supabase (from titipsapa project)
+supabase start
 
 # Run migrations
-alembic upgrade head
+DATABASE_URL_SYNC="postgresql://postgres:postgres@127.0.0.1:54322/lazy_matcher" \
+  alembic upgrade head
 
 # Seed candidate data
 python -m app.db.seed
 
 # Run tests
-pytest tests/test_matches.py -v
+PYTHON_GIL=0 pytest tests/test_matches.py -v
 
 # Start API server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+PYTHON_GIL=0 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Start worker (in another terminal)
-python -m app.worker.runner
+PYTHON_GIL=0 python -m app.worker.runner
 ```
 
 ### Frontend
@@ -63,24 +71,29 @@ cd frontend
 # Install deps
 npm install
 
-# Run Playwright tests
+# Run Playwright tests (needs backend running)
 npx playwright test
 
 # Start dev server
-npx next dev -p 3456
+npm run dev
 ```
-
-### Docker Compose
-
-```bash
-docker compose up --build
-```
-
-This starts: PostgreSQL, API server, two workers, and the frontend.
 
 ## Scoring Engine
 
-Deterministic hybrid scoring (keyword extraction + rules):
+### LLM-Based Scoring (Primary)
+
+Uses Gemini 2.5 Flash Lite as primary LLM with OpenRouter fallback:
+
+| Component    | Description                                    |
+|-------------|------------------------------------------------|
+| Skills      | LLM analyzes job requirements vs candidate     |
+| Experience  | LLM evaluates seniority and years alignment    |
+| Location    | LLM considers remote/hybrid/onsite preferences |
+| Batch       | Multiple jobs scored in one API call           |
+
+### Deterministic Fallback
+
+Keyword extraction + rule-based scoring (used when LLM unavailable):
 
 | Weight | Component    | How it scores                                          |
 |--------|-------------|--------------------------------------------------------|
@@ -88,7 +101,16 @@ Deterministic hybrid scoring (keyword extraction + rules):
 | 30%    | Experience  | Seniority match + years of experience alignment        |
 | 20%    | Location    | Remote preference + location keywords                  |
 
-Recommendations: `strong_match` (≥80), `good_match` (≥60), `partial_match` (≥40), `weak_match` (<40).
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_LLM_SCORING` | `true` | Enable LLM scoring (falls back to deterministic on failure) |
+| `LLM_BATCH_SIZE` | `5` | Max jobs per LLM API call |
+| `GEMINI_AI_KEY` | - | Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini model name |
+| `OPENROUTER_KEY` | - | OpenRouter API key (fallback) |
+| `OPENROUTER_MODEL` | `stepfun/step-3.5-flash:free` | OpenRouter model name |
 
 ## API
 
@@ -113,6 +135,34 @@ Get match result for a specific job.
 
 List all match jobs with optional filters.
 
+### GET /health
+
+Health check with cache status.
+
+## Deployment
+
+### Backend (Render)
+
+The `render.yaml` blueprint deploys:
+- API service (uvicorn)
+- Worker service (polls PostgreSQL for jobs)
+
+**Required environment variables:**
+- `DATABASE_URL` — Supabase connection string
+- `GEMINI_AI_KEY` — Google Gemini API key
+- `OPENROUTER_KEY` — OpenRouter fallback key
+- `UPSTASH_REDIS_URL` / `UPSTASH_REDIS_TOKEN` — Score caching
+
+### Frontend (Vercel)
+
+```bash
+cd frontend
+npm run build
+vercel --prod
+```
+
+Uses relative API URLs (`/api/v1/*`) with Next.js rewrites to backend.
+
 ## Database Schema
 
 - `candidates` — Candidate profiles (name, email, title, location)
@@ -125,9 +175,8 @@ List all match jobs with optional filters.
 
 ```bash
 # Backend integration tests
-cd backend && source .venv/bin/activate
-export DATABASE_URL="postgresql+asyncpg://anon@127.0.0.1:5432/lazy_matcher"
-pytest tests/test_matches.py -v
+cd backend
+PYTHON_GIL=0 pytest tests/test_matches.py -v
 
 # Frontend Playwright tests
 cd frontend
